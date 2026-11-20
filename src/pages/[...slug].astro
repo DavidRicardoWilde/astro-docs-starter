@@ -1,0 +1,79 @@
+---
+import { getCollection, render } from 'astro:content';
+import DocPage from '../components/DocPage.astro';
+import { defaultLocale, locales, type Locale } from '../site';
+
+export async function getStaticPaths() {
+  const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+  const pages = (await getCollection('docs')).map((entry) => {
+    const [folder, ...segments] = entry.id.split('/');
+    if (!Object.hasOwn(locales, folder) || segments.length === 0) {
+      throw new Error(`Invalid docs path "${entry.id}". Use a locale from src/site.ts as the first folder.`);
+    }
+
+    const locale = folder as Locale;
+    const path = segments.join('/');
+    const route = [
+      locale === defaultLocale ? '' : locale,
+      path === 'index' ? '' : path,
+    ].filter(Boolean).join('/');
+
+    return {
+      entry,
+      locale,
+      path,
+      route,
+      title: entry.data.title,
+      href: route ? `${base}/${route}/` : `${base}/`,
+    };
+  });
+
+  const pagesByLocale = Object.fromEntries(
+    (Object.keys(locales) as Locale[]).map((locale) => [
+      locale,
+      pages.filter((page) => page.locale === locale).sort(
+        (a, b) => a.entry.data.order - b.entry.data.order || a.path.localeCompare(b.path),
+      ),
+    ]),
+  );
+
+  for (const [locale, entries] of Object.entries(pagesByLocale)) {
+    if (entries.length && !entries.some((page) => page.path === 'index')) {
+      throw new Error(`Add src/content/docs/${locale}/index.md as the locale home page.`);
+    }
+  }
+
+  if (!pagesByLocale[defaultLocale].length) {
+    throw new Error(`Add src/content/docs/${defaultLocale}/index.md as the site home page.`);
+  }
+
+  const usedRoutes = new Set<string>();
+  return pages.map((page) => {
+    if (usedRoutes.has(page.route)) {
+      throw new Error(`Duplicate docs route "${page.href}". Check ${page.entry.id} for a path or locale collision.`);
+    }
+    usedRoutes.add(page.route);
+
+    const nav = pagesByLocale[page.locale].map(({ title, href }) => ({ title, href }));
+    const home = pagesByLocale[page.locale].find((entry) => entry.path === 'index')!;
+    const languages = (Object.keys(locales) as Locale[]).flatMap((locale) => {
+      const entries = pagesByLocale[locale];
+      const target = entries.find((entry) => entry.path === page.path) ??
+        entries.find((entry) => entry.path === 'index');
+      return target ? [{ locale, title: locales[locale].name, href: target.href }] : [];
+    });
+
+    return {
+      params: { slug: page.route || undefined },
+      props: { entry: page.entry, locale: page.locale, current: page.href, home: home.href, nav, languages },
+    };
+  });
+}
+
+const { entry, ...layout } = Astro.props;
+const { Content, headings } = await render(entry);
+---
+
+<DocPage {...layout} title={entry.data.title} description={entry.data.description} headings={headings} overview={layout.current === layout.home}>
+  <Content />
+</DocPage>

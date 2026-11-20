@@ -1,0 +1,33 @@
+name: Bug report
+description: Report a build failure, routing issue, or unexpected site behavior.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Include the affected page and a minimal example or repository link if available.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Add relevant error messages or screenshots.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Include the template revision, Node.js and pnpm versions, and browser or host if relevant.
+      placeholder: "Commit abc1234, Node.js 24, pnpm 12.4.1, Safari"
+    validations:
+      required: true

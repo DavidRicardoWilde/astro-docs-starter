@@ -1,0 +1,226 @@
+---
+import '../styles/global.css';
+import { locales, site, type DocLink, type Locale } from '../site';
+
+interface Props {
+  locale: Locale;
+  title: string;
+  description: string;
+  home: string;
+  current: string;
+  nav: DocLink[];
+  languages: Array<DocLink & { locale: Locale }>;
+  headings: Array<{ depth: number; slug: string; text: string }>;
+  overview: boolean;
+}
+
+const { locale, title, description, home, current, nav, languages, headings, overview } = Astro.props;
+const copy = locales[locale];
+const themeChoices = ['light', 'dark', 'system'];
+const outline = headings.filter(({ depth }) => depth === 2 || depth === 3);
+const next = nav[nav.findIndex(({ href }) => href === current) + 1];
+---
+
+<!doctype html>
+<html lang={copy.htmlLang}>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <link rel="icon" type="image/png" href={`${import.meta.env.BASE_URL}favicon.png`} />
+    <title>{title} · {site.title}</title>
+    <script is:inline define:vars={{ themeKey: `docs-theme:${import.meta.env.BASE_URL}` }}>
+      try {
+        const savedTheme = localStorage.getItem(themeKey);
+        if (['light', 'dark', 'system'].includes(savedTheme)) {
+          document.documentElement.dataset.theme = savedTheme;
+        }
+      } catch {
+        // The system preference still applies when storage is unavailable.
+      }
+    </script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href={home}>
+        <img class="brand-mark" src={`${import.meta.env.BASE_URL}favicon.png`} alt="" width="29" height="29" />
+        <span>{site.title}<span class="brand-docs"> / {copy.docs}</span></span>
+      </a>
+      <nav class="top-links">
+        {site.repository && <a class="github-link" href={site.repository}>GitHub <span aria-hidden="true">↗</span></a>}
+        <details class="menu theme-menu">
+          <summary class="theme-toggle" aria-label={copy.theme} title={copy.theme}><span aria-hidden="true">◐</span></summary>
+          <div class="menu-options" role="group" aria-label={copy.theme}>
+            {themeChoices.map((choice, index) => (
+              <button type="button" data-theme-choice={choice} aria-pressed={choice === 'system'}>
+                {copy.themes[index]}
+              </button>
+            ))}
+          </div>
+        </details>
+        {languages.length > 1 && (
+          <details class="menu locale-menu">
+            <summary aria-label={copy.language}>{copy.name} <span aria-hidden="true">⌄</span></summary>
+            <div class="menu-options">
+              {languages.map((language) => (
+                <a href={language.href} lang={locales[language.locale].htmlLang}
+                  aria-current={language.locale === locale ? 'page' : undefined}>
+                  {language.title}
+                  {language.locale === locale && <span aria-hidden="true">✓</span>}
+                </a>
+              ))}
+            </div>
+          </details>
+        )}
+      </nav>
+    </header>
+
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="sidebar-search">
+          <span aria-hidden="true">⌕</span>
+          <input type="search" class="sidebar-search-input" placeholder={copy.search}
+            aria-label={copy.search} aria-keyshortcuts="Meta+K Control+K" />
+          <kbd aria-hidden="true">⌘ / Ctrl K</kbd>
+        </div>
+        <p class="eyebrow sidebar-guide-label">{copy.guides}</p>
+        <nav class="guide-nav" aria-label={copy.guides}>
+          {nav.map(({ href, title: label }) => (
+            <a href={href} class="side-link" aria-current={href === current ? 'page' : undefined}>{label}</a>
+          ))}
+        </nav>
+        <p class="search-empty" role="status" hidden>{copy.empty}</p>
+      </aside>
+
+      <main id="content">
+        <header class:list={['page-header', { hero: overview }]}>
+          <h1>{title}</h1>
+          <p>{description}</p>
+        </header>
+        <article class="doc-section">
+          <slot />
+        </article>
+        {next && (
+          <a class="next-card" href={next.href}>
+            <span><span class="eyebrow">{copy.next}</span><strong>{next.title}</strong></span>
+            <span aria-hidden="true">→</span>
+          </a>
+        )}
+        <footer class="footer">
+          <span>{site.title}</span>
+          {site.repository && <a href={site.repository}>GitHub <span aria-hidden="true">↗</span></a>}
+        </footer>
+      </main>
+
+      {outline.length > 0 && (
+        <aside class="toc-sidebar">
+          <nav aria-label={copy.contents}>
+            <p class="eyebrow">{copy.contents}</p>
+            {outline.map(({ depth, slug, text }) => (
+              <a class:list={['toc-link', depth === 3 && 'toc-nested']} href={`#${encodeURIComponent(slug)}`}>{text}</a>
+            ))}
+          </nav>
+        </aside>
+      )}
+    </div>
+    <script>
+      const themeKey = `docs-theme:${import.meta.env.BASE_URL}`;
+      const themeMenu = document.querySelector<HTMLDetailsElement>('.theme-menu');
+      const themeButtons = document.querySelectorAll<HTMLButtonElement>('[data-theme-choice]');
+
+      const markTheme = () => {
+        const selected = document.documentElement.dataset.theme ?? 'system';
+        themeButtons.forEach((button) => {
+          button.setAttribute('aria-pressed', String(button.dataset.themeChoice === selected));
+        });
+      };
+
+      themeButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+          const theme = button.dataset.themeChoice ?? 'system';
+          document.documentElement.dataset.theme = theme;
+          markTheme();
+          try {
+            localStorage.setItem(themeKey, theme);
+          } catch {
+            // A theme choice still works for the current page.
+          }
+          if (themeMenu) {
+            themeMenu.open = false;
+            themeMenu.querySelector('summary')?.focus();
+          }
+        });
+      });
+      markTheme();
+
+      const searchInput = document.querySelector<HTMLInputElement>('.sidebar-search-input');
+      const searchEmpty = document.querySelector<HTMLElement>('.search-empty');
+      const normalize = (text: string) => text.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLocaleLowerCase();
+      const links = Array.from(document.querySelectorAll<HTMLAnchorElement>('.guide-nav .side-link'));
+      const searchEntries = links.map((link) => ({ link, title: normalize(link.textContent ?? '') }));
+      const textCache = new Map<string, Promise<string>>();
+
+      function pageText(link: HTMLAnchorElement) {
+        if (link.getAttribute('aria-current') === 'page') {
+          return Promise.resolve(normalize(document.querySelector('.doc-section')?.textContent ?? ''));
+        }
+
+        let text = textCache.get(link.href);
+        if (!text) {
+          text = fetch(link.href)
+            .then((response) => response.ok ? response.text() : '')
+            .then((html) => new DOMParser().parseFromString(html, 'text/html'))
+            .then((page) => normalize(page.querySelector('.doc-section')?.textContent ?? ''))
+            .catch(() => {
+              textCache.delete(link.href);
+              return '';
+            });
+          textCache.set(link.href, text);
+        }
+        return text;
+      }
+
+      if (searchInput && searchEmpty) {
+        let revision = 0;
+        let searchTask: Promise<void> = Promise.resolve();
+
+        const search = async () => {
+          const currentRevision = ++revision;
+          const query = normalize(searchInput.value.trim());
+          searchEmpty.hidden = true;
+          searchEntries.forEach(({ link, title }) => { link.hidden = !title.includes(query); });
+          if (!query) return;
+
+          const texts = await Promise.all(searchEntries.map(({ link }) => pageText(link)));
+          if (currentRevision !== revision) return;
+
+          searchEntries.forEach(({ link, title }, index) => {
+            link.hidden = !title.includes(query) && !texts[index].includes(query);
+          });
+          searchEmpty.hidden = links.some((link) => !link.hidden);
+        };
+
+        searchInput.addEventListener('input', () => { searchTask = search(); });
+        searchInput.addEventListener('keydown', async (event) => {
+          if (event.key === 'Escape') {
+            searchInput.value = '';
+            searchTask = search();
+            searchInput.blur();
+          }
+          if (event.key === 'Enter' && searchInput.value.trim()) {
+            const requestedRevision = revision;
+            await searchTask;
+            if (requestedRevision === revision) links.find((link) => !link.hidden)?.click();
+          }
+        });
+        document.addEventListener('keydown', (event) => {
+          if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+            event.preventDefault();
+            searchInput.focus();
+            searchInput.select();
+          }
+        });
+      }
+    </script>
+  </body>
+</html>
